@@ -5,15 +5,11 @@ let sqrt (n : int) : int =
   in loop 0
 
 
-
-let rec pow (n : int) (k : int) : int =
-  match n, k with
-  | 0, 0 -> 1
-  | 0, _ -> 0
-  | _, 0 -> 1
-  | _, k when k > 0 -> n * pow n (k - 1)
-  | _, _ -> failwith "negative exponent"
-
+let pow (n : int) (k : int) : int =
+  let rec loop acc n k =
+    if k = 0 then acc
+    else loop (acc * n) n (k - 1)
+  in loop 1 n k
 
 
 let is_ws = function
