@@ -85,7 +85,7 @@ let rec eval stack prog =
     )
   | "^" :: xs -> (
       match stack with
-      | a :: b :: rest -> eval ((pow a b) :: rest) xs
+      | a :: b :: rest -> eval ((pow b a) :: rest) xs
       | _ -> stack
     )
   | n :: xs -> eval ((int_of_string n) :: stack) xs
