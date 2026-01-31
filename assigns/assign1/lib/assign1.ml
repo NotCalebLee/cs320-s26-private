@@ -1,9 +1,13 @@
+let sqrt (n : int) : int = 
+  let rec loop x = 
+    if(x * x) >= n then x
+    else loop (x + 1)
+  in loop 0
 
-let sqrt (_n : int) : int = (* CHANGE _n to n! *)
-  assert false
+let rec pow (n : int) (k : int) : int = 
+  if k = 0  then 1
+  else n * pow n (k - 1)
 
-let pow (_n : int) (_k : int) : int = (* CHANGE _n to n and _k to k! *)
-  assert false
 
 let is_ws = function
   | ' ' | '\012' | '\n' | '\r' | '\t' -> true
@@ -31,14 +35,61 @@ let implode_all (css : char list list) : string list =
     | cs :: rest -> loop (implode cs :: acc) rest
   in loop [] css
 
-let split_on_ws_helper (_cs : char list) : char list list =
-  assert false
+let split_on_ws_helper (cs : char list) : char list list =
+  let rec loop c acc cs = 
+    match cs with
+    | [] -> if c = [] then acc
+      else acc @ [c]
+    | d :: ds -> if is_ws d then
+        if c = [] then loop [] acc ds
+        else loop [] (acc @ [c]) ds
+      else loop (c @ [d]) acc ds
+  in loop [] [] cs
 
 let split_on_ws (s : string) : string list =
   implode_all (split_on_ws_helper (explode s))
 
-let eval (_stack : int list) (_prog : string list) : int list =
-  assert false
+
+let rec eval stack prog =
+  match prog with
+  | [] -> stack
+  | "+" :: xs -> (
+      match stack with 
+      | a :: b :: rest -> eval ((b + a) :: rest) xs
+      | _ -> stack
+    )
+  | "-" :: xs -> (
+      match stack with
+      | a :: b :: rest -> eval ((b - a) :: rest) xs
+      | _ -> stack
+    )
+  | "*" :: xs -> (
+      match stack with
+      | a :: b :: rest -> eval ((b * a) :: rest) xs
+      | _ -> stack
+    )
+  | "/" :: xs -> (
+      match stack with
+      | a :: b :: rest -> eval ((b / a) :: rest) xs
+      | _ -> stack
+    )
+  | "mod" :: xs -> (
+      match stack with
+      | a :: b :: rest -> eval ((b mod a) :: rest) xs
+      | _ -> stack
+    )
+  | "sqrt" :: xs -> (
+      match stack with
+      | a :: b -> eval ((sqrt a) :: b) xs
+      | _ -> stack
+    )
+  | "^" :: xs -> (
+      match stack with
+      | a :: b :: rest -> eval ((pow a b) :: rest) xs
+      | _ -> stack
+    )
+  | n :: xs -> eval ((int_of_string n) :: stack) xs
+
 
 let interp (input : string) : int =
   match eval [] (split_on_ws input) with
