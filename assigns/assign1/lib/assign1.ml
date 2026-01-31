@@ -4,8 +4,9 @@ let sqrt (n : int) : int =
     else loop (x + 1)
   in loop 0
 
-let rec pow (n : int) (k : int) : int = 
-  if k = 0  then 1
+let rec pow (n : int) (k : int) : int =
+  if k < 0 then failwith "negative exponent"
+  else if k = 0 then 1
   else n * pow n (k - 1)
 
 
