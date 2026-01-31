@@ -6,12 +6,10 @@ let sqrt (n : int) : int =
 
 
 let pow (n : int) (k : int) : int =
-  if k < 0 then failwith "negative exponent"
-  else 
-    let rec loop acc n k =
-      if k = 0 then acc
-      else loop (acc * n) n (k - 1)
-    in loop 1 n k
+  let rec loop acc n k =
+    if k = 0 then acc
+    else loop (acc * n) n (k - 1)
+  in loop 1 n k
 
 
 let is_ws = function
