@@ -4,10 +4,16 @@ let sqrt (n : int) : int =
     else loop (x + 1)
   in loop 0
 
+
+
 let rec pow (n : int) (k : int) : int =
-  if k < 0 then failwith "negative exponent"
-  else if k = 0 then 1
-  else n * pow n (k - 1)
+  match n, k with
+  | 0, 0 -> 1
+  | 0, _ -> 0
+  | _, 0 -> 1
+  | _, k when k > 0 -> n * pow n (k - 1)
+  | _, _ -> failwith "negative exponent"
+
 
 
 let is_ws = function
