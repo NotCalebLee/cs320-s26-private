@@ -35,7 +35,44 @@ let lex s =
         else assert false
   in go [] 0
 
-let eval _e = assert false (* TODO *)
+
+let rec eval expr =
+  let (e, rest) = eval_add_sub expr in
+  match rest with
+  | [] -> e
+  | _ -> assert false
+
+and eval_add_sub expr =
+  let (e, rest) = eval_mul_div expr in
+  let rec loop acc xs =
+    match xs with
+    | "+" :: rest -> let (x, rest) = eval_mul_div rest in
+      loop (acc + x) rest
+    | "-" :: rest -> let (x, rest) = eval_mul_div rest in
+      loop (acc - x) rest
+    | _ -> (acc, xs) in
+  loop e rest
+
+and eval_mul_div expr =
+  let (e, rest) = eval_num_paren expr in
+  let rec loop acc xs =
+    match xs with
+    | "*" :: rest -> let (x, rest) = eval_num_paren rest in
+      loop (acc * x) rest
+    | "/" :: rest -> let (x, rest) = eval_num_paren rest in
+      loop (acc / x) rest
+    | _ -> (acc, xs) in
+  loop e rest
+
+and eval_num_paren expr =
+  match expr with
+  | "(" :: rest -> let (e, rest) = eval_add_sub rest in
+    (match rest with
+      | ")" :: rest -> (e, rest)
+      | _ -> assert false)
+  | n :: rest -> (int_of_string n, rest)
+  | [] -> assert false
+
 
 let interp (input : string) : int =
   match eval (lex input) with
