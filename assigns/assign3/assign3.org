@@ -73,7 +73,8 @@ using association lists to represent variable bindings that we create
 during a calculator interaction.  An association list is a list of
 key-value pairs (~('k * 'v) list~).  See the [[https://cs3110.github.io/textbook/chapters/data/assoc_list.html][textbook chapter]] and the
 [[https://nmmull.github.io/stdlib320/stdlib320/Stdlib320/List/index.html#association-lists][~stdlib320~ section]] for more information.  For the above sample
-interaction the final assocation list we should get is:
+interaction the final assocation list we should get up to reordering
+is:
 
 #+begin_src
   [("X", 4); ("Y", 12); ("ADDXY", 16)]
