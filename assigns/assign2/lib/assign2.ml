@@ -40,6 +40,7 @@ let rec eval expr =
   let (e, rest) = eval_add_sub expr in
   match rest with
   | [] -> e
+  | _ -> assert false
 
 and eval_add_sub expr =
   let (e, rest) = eval_mul_div expr in
@@ -66,8 +67,9 @@ and eval_mul_div expr =
 and eval_num_paren expr =
   match expr with
   | "(" :: rest -> let (e, rest) = eval_add_sub rest in
-    match rest with
+    (match rest with
       | ")" :: rest -> (e, rest)
+      | _ -> assert false)
   | n :: rest -> (int_of_string n, rest)
   | [] -> assert false
 
