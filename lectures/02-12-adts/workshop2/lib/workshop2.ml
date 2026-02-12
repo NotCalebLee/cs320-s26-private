@@ -26,8 +26,20 @@ let split_at (k : int) (s : string) : string * string =
   then s, ""
   else String.sub s 0 k, String.sub s k (String.length s - k)
 
-let get_int (_s : string) : (int * string) option =
-  assert false
+let get_int (s : string) : (int * string) option =
+  if i >= String.length s 
+  then (int_of_string s, "")
+  let rec loop i = 
+    if is_digit s.[i]
+    then loop (i+1)
+    else  let (int_string, rest) = split_at i s in
+      let (int_of_string int_string, rest)
+  in 
+  if is_digit s.[0]
+  then Some (loop 1)
+  else if s.[0] = '-' && is_digit s.[1]
+  then Some (loop 2)
+  else None
 
 (* Problem 3 *)
 
