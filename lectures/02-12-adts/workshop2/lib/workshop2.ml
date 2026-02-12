@@ -6,8 +6,12 @@ type 'a tree =
   | Node2 of 'a * 'a tree * 'a tree
   | Node3 of 'a * 'a tree * 'a tree * 'a tree
 
-let reverse (_t : 'a tree) : 'a tree =
-  assert false
+let rec reverse (t : 'a tree) : 'a tree =
+  match t with 
+  | Leaf v -> Leaf v
+  | Node2 (v, s1, s2) -> Node2 (v, reverse s2, reverse s1)
+  | Node3 (v, s1, s2, s3) -> Node3 (v, reverse s3, reverse s2, reverse s1)
+  
 
 (* Problem 2 *)
 
