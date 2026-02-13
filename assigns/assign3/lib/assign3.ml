@@ -54,6 +54,7 @@ let lex s =
       | '/' -> go ("/" :: acc) (i + 1)
       | '(' -> go ("(" :: acc) (i + 1)
       | ')' -> go (")" :: acc) (i + 1)
+      | '=' -> go ("=" :: acc) (i + 1)
       | c ->
         if is_digit c
         then go_digits acc i 1
