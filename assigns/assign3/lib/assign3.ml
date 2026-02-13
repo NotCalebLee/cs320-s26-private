@@ -43,6 +43,7 @@ let lex s =
       else if is_upper (String.get s (i + j))
       then go_upper acc i (j + 1)
       else go (String.sub s i j :: acc) (i + j)
+    in
     if i >= String.length s
     then List.rev acc
     else
