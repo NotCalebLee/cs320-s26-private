@@ -37,6 +37,12 @@ let lex s =
       then go_digits acc i (j + 1)
       else go (String.sub s i j :: acc) (i + j)
     in
+    let rec go_upper acc i j =
+      if i + j >= String.length s
+      then List.rev (String.sub s i j :: acc)
+      else if is_upper (String.get s (i + j))
+      then go_upper acc i (j + 1)
+      else go (String.sub s i j :: acc) (i + j)
     if i >= String.length s
     then List.rev acc
     else
@@ -50,6 +56,8 @@ let lex s =
       | c ->
         if is_digit c
         then go_digits acc i 1
+        else if is_upper c
+        then go_upper acc i 1
         else if is_ws c
         then go acc (i + 1)
         else assert false
