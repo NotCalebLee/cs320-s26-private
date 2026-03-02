@@ -85,17 +85,33 @@ type expr =
   | Bop of op * expr * expr
   | If of expr * expr * expr
 
-let expr_of_sexpr_opt (_ : sexpr) : expr option =
-  assert false (* TODO *)
+let rec expr_of_sexpr_opt (s : sexpr) : expr option =
+  match s with
+  | Atom str -> int_of_string str
+  | List (Atom "if" :: e1 :: e2 :: e3 :: []) -> 
+    (match expr_of_sexpr_opt e1, expr_of_sexpr_opt e2, expr_of_sexpr_opt e3 with
+    | Some e1, Some e2, Some e3 -> Some (If (e1, e2, e3))
+    | _ -> None)
+  | List (op :: e1 :: e2 :: []) -> 
+    (match op_of_sexpr_opt op, expr_of_sexpr_opt e1, expr_of_sexpr_opt e2 with
+      | Some op, Some e1, Some e2 -> Some (Bop (op, e1, e2))
+      | _ -> None)
+  | _ -> None 
 
-let expr_of_string_opt (_ : string) : expr option =
-  assert false (* TODO *)
+let expr_of_string_opt (s : string) : expr option =
+  match sexpr_of_string_opt s with
+  | Some sexpr -> expr_of_string_opt sexpr
+  | None -> None 
 
-let sexpr_of_expr (_ : expr) : sexpr =
-  assert false (* TODO *)
 
-let string_of_expr (_ : expr) : string =
-  assert false (* TODO *)
+let sexpr_of_expr (e : expr) : sexpr =
+  match e with 
+  | Int n -> Atom (string_of_int n)
+  | Bop (op, e1, e2) -> List [(Atom string_of_op op); sexpr_of_expr e1; sexpr_of_expr e2]
+  | If (e1, e2, e3) -> List [Atom "if"; sexpr_of_expr e1; sexpr_of_expr e2; sexpr_of_expr e3]
+
+let string_of_expr (e : expr) : string =
+  string_of_sexpr (sexpr_of_expr e)
 
 type ty = BoolT | IntT
 
