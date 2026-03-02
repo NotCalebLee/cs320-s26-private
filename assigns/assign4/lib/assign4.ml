@@ -332,6 +332,7 @@ let rec value_of_expr (e : expr) : value =
     | Add, IntV n1, IntV n2 -> IntV (n1 + n2)
     | Mul, IntV n1, IntV n2 -> IntV (n1 * n2)
     | Eq, IntV n1, IntV n2 -> BoolV (n1 = n2)
+    | Eq, BoolV b1, BoolV b2 -> BoolV (b1 = b2)
     | _ -> failwith "undefined")
   | If (e1, e2, e3) -> 
     let v1 = value_of_expr e1 in 
