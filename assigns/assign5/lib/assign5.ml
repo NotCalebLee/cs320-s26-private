@@ -31,53 +31,48 @@ let consistent (i1 : (string * int) list) (i2 : (string * int) list) : bool =
       | Some m -> n = m)
     i1
 
-let union_idx_space (i1 : (string * int) list) (i2 : (string * int) list)
-    : (string * int) list =
+let union_idx_space (i1 : (string * int) list) (i2 : (string * int) list) : (string * int) list =
   i1 @ List.filter (fun (x, _) -> not (List.mem_assoc x i1)) i2
 
 let dim_check (env : (string * tensor) list) (e : expr) : ((string * int) list) option =
   let rec go = function
-    | Ident (name, labels) -> (
-        match List.assoc_opt name env with
+    | Ident (name, labels) -> 
+        (match List.assoc_opt name env with
         | None -> None
         | Some t ->
-            let old_space = Tensor.idx_space t in
-            if List.length labels <> List.length old_space || not (distinct labels) then
+          let old_space = Tensor.idx_space t in
+            if List.length labels <> List.length old_space || not (distinct labels) then 
               None
             else
-              Some (List.map2 (fun lbl (_, n) -> (lbl, n)) labels old_space)
-      )
-    | Map (_, e1, e2) -> (
-        match go e1, go e2 with
+              Some (List.map2 (fun lbl (_, n) -> (lbl, n)) labels old_space))
+    | Map (_, e1, e2) -> 
+      (match go e1, go e2 with
         | Some i1, Some i2 when consistent i1 i2 && consistent i2 i1 ->
-            Some (union_idx_space i1 i2)
-        | _ -> None
-      )
-    | Fold (_, x, e) -> (
-        match go e with
-        | Some idx_space when List.mem_assoc x idx_space ->
-            Some (remove_assoc x idx_space)
-        | _ -> None
-      )
+          Some (union_idx_space i1 i2)
+        | _ -> None)
+    | Fold (_, x, e) -> 
+      (match go e with
+      | Some idx_space -> Some (remove_assoc x idx_space)
+      | None -> None)
   in
   go e
 
 let eval (env : (string * tensor) list) (e : expr) : tensor =
-  let apply_op op a b =
+  let addMul op a b =
     match op with
     | Add -> a +. b
     | Mul -> a *. b
   in
   let rec fold_axis op t axis idx axis_size k acc =
-    if k = axis_size then acc
+    if k = axis_size then 
+      acc
     else
       let v = Tensor.get t ((axis, k) :: idx) in
       let acc' =
         match acc with
         | None -> Some v
-        | Some a -> Some (apply_op op a v)
-      in
-      fold_axis op t axis idx axis_size (k + 1) acc'
+        | Some a -> Some (addMul op a v)
+      in fold_axis op t axis idx axis_size (k + 1) acc'
   in
   let rec go = function
     | Ident (name, labels) ->
@@ -88,7 +83,7 @@ let eval (env : (string * tensor) list) (e : expr) : tensor =
         let t2 = go e2 in
         let idx_space = union_idx_space (Tensor.idx_space t1) (Tensor.idx_space t2) in
         Tensor.init idx_space (fun idx ->
-            apply_op op (Tensor.get t1 idx) (Tensor.get t2 idx))
+            addMul op (Tensor.get t1 idx) (Tensor.get t2 idx))
     | Fold (op, axis, e) ->
         let t = go e in
         let full_space = Tensor.idx_space t in
