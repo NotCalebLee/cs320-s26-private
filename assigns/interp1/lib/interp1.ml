@@ -55,7 +55,7 @@ type dyn_env = value Env.t
 
 (* Type Checking *)
 
-let type_of (ctxt : ctxt) (e : expr) : ty option =
+let rec type_of (ctxt : ctxt) (e : expr) : ty option =
 match e with
   | Unit -> Some Unit
   | Bool _ -> Some Bool
@@ -114,7 +114,7 @@ match e with
 exception Div_by_zero
 exception Assert_fail
 
-let eval (env : dyn_env) (e : expr) : value =
+let rec eval (env : dyn_env) (e : expr) : value =
 match e with
   | Unit -> Unit
   | Bool b -> Bool b
