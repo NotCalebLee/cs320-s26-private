@@ -66,7 +66,7 @@ match e with
     | None -> None
     | Some t1 -> type_of (Env.add x t1 ctxt) e2)
   | LetRec {name; arg; arg_ty; out_ty; binding; body} ->
-    let f_ty = Fun (arg_ty, out_ty) in
+    let f_ty = (Ast.Interp1.Fun (arg_ty, out_ty) : ty) in
     let ctxt_binding =
       Env.add arg arg_ty (Env.add name f_ty ctxt)
     in
@@ -80,7 +80,7 @@ match e with
     | _ -> None)
   | Fun (x, t1, body) -> 
     (match type_of (Env.add x t1 ctxt) body with
-    | Some t2 -> Some Fun (t1, t2)
+    | Some t2 -> Some (Ast.Interp1.Fun (t1, t2))
     | None -> None)
   | App (e1, e2) -> 
     (match type_of ctxt e1, type_of ctxt e2 with
