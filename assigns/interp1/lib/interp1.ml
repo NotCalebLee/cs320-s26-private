@@ -56,7 +56,58 @@ type dyn_env = value Env.t
 (* Type Checking *)
 
 let type_of (ctxt : ctxt) (e : expr) : ty option =
-  ignore (ctxt, e); assert false (* TODO *)
+match e with
+  | Unit -> Some Unit
+  | Bool _ -> Some Bool
+  | Int _ -> Some Int
+  | Var x -> Env.find_opt x ctxt
+  | Let (x, e1, e2) -> 
+    (match type_of ctxt e1 with
+    | None -> None
+    | Some t1 -> type_of (Env.add x t1 ctxt) e2)
+  | LetRec {name; arg; arg_ty; out_ty; binding; body} ->
+    let f_ty = Fun (arg_ty, out_ty) in
+    let ctxt_binding =
+      Env.add arg arg_ty (Env.add name f_ty ctxt)
+    in
+    let ctxt_body = Env.add name f_ty ctxt in
+      (match type_of ctxt_binding binding with
+      | Some t when t = out_ty -> type_of ctxt_body body
+      | _ -> None)
+  | If (e1, e2, e3) -> 
+    (match type_of ctxt e1, type_of ctxt e2, type_of ctxt e3 with
+    | Some Bool, Some t2, Some t3 when t2 = t3 -> Some t2
+    | _ -> None)
+  | Fun (x, t1, body) -> 
+    (match type_of (Env.add x t1 ctxt) body with
+    | Some t2 -> Some (Fun (t1, t2))
+    | None -> None)
+  | App (e1, e2) -> 
+    (match type_of ctxt e1, type_of ctxt e2 with
+    | Some (Fun (t_arg, t_res)), Some t2 when t_arg = t2 -> Some t_res
+    | _ -> None)
+  | Bop (b, e1, e2) -> 
+    (match b with
+      | Add | Sub | Mul | Div | Mod -> 
+        (match type_of ctxt e1, type_of ctxt e2 with
+        | Some Int, Some Int -> Some Int
+        | _ -> None)
+    | And | Or -> 
+      (match type_of ctxt e1, type_of ctxt e2 with
+      | Some Bool, Some Bool -> Some Bool
+      | _ -> None)
+    | Eq | Neq | Lt | Lte | Gt | Gte -> 
+      (match type_of ctxt e1, type_of ctxt e2 with
+      | Some t1, Some t2 when t1 = t2 -> Some Bool
+      | _ -> None))
+  | Negate e1 -> 
+    (match type_of ctxt e1 with
+    | Some Int -> Some Int
+    | _ -> None)
+  | Assert e1 -> 
+    (match type_of ctxt e1 with
+    | Some Bool -> Some Unit
+    | _ -> None)
 
 (* Evaluation *)
 
@@ -64,8 +115,91 @@ exception Div_by_zero
 exception Assert_fail
 
 let eval (env : dyn_env) (e : expr) : value =
-  ignore (env, e); assert false (* TODO *)
-
+match e with
+  | Unit -> Unit
+  | Bool b -> Bool b
+  | Int n -> Int n
+  | Var x -> Env.find x env
+  | Let (x, e1, e2) ->
+    let v1 = eval env e1 in
+    eval (Env.add x v1 env) e2
+  | LetRec { name; arg; arg_ty; out_ty = _; binding; body } ->
+    let clos = Clos (env, Some name, Fun (arg, arg_ty, binding)) in
+    let env' = Env.add name clos env in
+    eval env' body
+  | If (e1, e2, e3) -> 
+    (match eval env e1 with
+    | Bool true -> eval env e2
+    | Bool false -> eval env e3
+    | _ -> assert false)
+  | Fun (x, _ty, body) ->
+    Clos (env, None, Fun (x, _ty, body))
+  | App (e1, e2) -> 
+    let v1 = eval env e1 in
+    let v2 = eval env e2 in
+    match v1 with
+    | Clos (clos_env, None, Fun (x, _ty, body)) ->
+      eval (Env.add x v2 clos_env) body
+    | Clos (clos_env, Some f, Fun (x, _ty, body)) ->
+      let env' =
+        Env.add x v2 (Env.add f v1 clos_env)
+      in eval env' body
+    | _ -> assert false
+  | Bop (b, e1, e2) -> (
+      match b with
+      | Add -> 
+        (match eval env e1, eval env e2 with
+        | Int n1, Int n2 -> Int (n1 + n2)
+        | _ -> assert false)
+      | Sub -> 
+        (match eval env e1, eval env e2 with
+        | Int n1, Int n2 -> Int (n1 - n2)
+        | _ -> assert false)
+      | Mul -> 
+        (match eval env e1, eval env e2 with
+        | Int n1, Int n2 -> Int (n1 * n2)
+        | _ -> assert false)
+      | Div -> 
+        (match eval env e1, eval env e2 with
+        | Int _, Int 0 -> raise Div_by_zero
+        | Int n1, Int n2 -> Int (n1 / n2)
+        | _ -> assert false)
+      | Mod -> 
+        (match eval env e1, eval env e2 with
+        | Int _, Int 0 -> raise Div_by_zero
+        | Int n1, Int n2 -> Int (n1 mod n2)
+        | _ -> assert false)
+      | Eq -> Bool (eval env e1 = eval env e2)
+      | Neq -> Bool (eval env e1 <> eval env e2)
+      | Lt -> Bool (eval env e1 < eval env e2)
+      | Lte -> Bool (eval env e1 <= eval env e2)
+      | Gt -> Bool (eval env e1 > eval env e2)
+      | Gte -> Bool (eval env e1 >= eval env e2)
+      | And -> 
+        (match eval env e1 with
+        | Bool false -> Bool false
+        | Bool true -> 
+          (match eval env e2 with
+          | Bool b -> Bool b
+          | _ -> assert false)
+        | _ -> assert false)
+      | Or -> 
+        (match eval env e1 with
+        | Bool true -> Bool true
+        | Bool false -> 
+          (match eval env e2 with
+          | Bool b -> Bool b
+          | _ -> assert false)
+        | _ -> assert false))
+  | Negate e1 -> 
+    (match eval env e1 with
+    | Int n -> Int (-n)
+    | _ -> assert false)
+  | Assert e1 -> 
+    (match eval env e1 with
+    | Bool true -> Unit
+    | Bool false -> raise Assert_fail
+    | _ -> assert false)
 (* Interpretation *)
 
 let interp ~(filename : string) : value option =
