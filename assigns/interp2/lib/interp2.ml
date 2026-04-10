@@ -167,8 +167,46 @@ type ctxt = ty Env.t
 
 (* Type Checking *)
 
-let type_of_expr (ctxt : ctxt) (e : expr) : (ty, Error_msg.t) result =
-  ignore (ctxt, e); assert false
+let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty, Error_msg.t) result =
+  match e.expr with
+  | Unit -> Ok TUnit
+  | Bool _ -> Ok TBool
+  | Int _ -> Ok TInt
+  | Var x -> Ok (Env.find x ctxt)
+  | Assert e1 ->
+    (match type_of_expr ctxt e1 with
+    | Ok TBool -> Ok TUnit
+    | Ok _ -> assert false
+    | Error _ -> assert false)
+  | Negate e1 ->
+    (match type_of_expr ctxt e1 with
+    | Ok TInt -> Ok TInt
+    | Ok _ -> assert false
+    | Error _ -> assert false)
+  | Bop (op, e1, e2) ->
+    (match op, type_of_expr ctxt e1, type_of_expr ctxt e2 with
+    | (Add | Sub | Mul | Div | Mod), Ok TInt, Ok TInt -> Ok TInt
+    | (Eq | Neq | Lt | Lte | Gt | Gte), Ok t1, Ok t2 when t1 = t2 -> Ok TBool
+    | (And | Or), Ok TBool, Ok TBool -> Ok TBool
+    | _ -> assert false)
+  | If (e1, e2, e3) ->
+    (match type_of_expr ctxt e1, type_of_expr ctxt e2, type_of_expr ctxt e3 with
+    | Ok TBool, Ok t2, Ok t3 when t2 = t3 -> Ok t2
+    | _ -> assert false)
+  | Let {is_rec = false; name; args = []; annot = _; binding; body} ->
+    (match type_of_expr ctxt binding with
+    | Ok t_binding ->
+      let ctxt' = Env.add name t_binding ctxt in
+        type_of_expr ctxt' body
+    | Error _ -> assert false)
+  | Let _ -> assert false
+  | Nil -> assert false
+  | Tuple _ -> assert false
+  | Fun _ -> assert false
+  | App _ -> assert false
+  | Match _ -> assert false
+
+
 
 let type_of (p : prog) : (ty, Error_msg.t) result =
   let rec go ctxt ty p =
@@ -215,8 +253,58 @@ exception Div_by_zero of pos
 exception Assert_fail of pos
 exception Match_fail of pos
 
-let eval_expr (env : dyn_env) (e : expr) : value =
-  ignore (env, e); assert false
+let rec eval_expr (env : dyn_env) (e : expr) : value =
+  match e.expr with
+  | Unit -> VUnit
+  | Bool b -> VBool b
+  | Int n -> VInt n
+  | Var x -> Env.find x env
+  | Assert e1 ->
+    (match eval_expr env e1 with
+    | VBool true -> VUnit
+    | VBool false -> raise (Assert_fail e.pos)
+    | _ -> assert false)
+  | Negate e1 ->
+    (match eval_expr env e1 with
+    | VInt n -> VInt (-n)
+    | _ -> assert false)
+  | Bop (op, e1, e2) ->
+    (match op, eval_expr env e1, eval_expr env e2 with
+    | Add, VInt n1, VInt n2 -> VInt (n1 + n2)
+    | Sub, VInt n1, VInt n2 -> VInt (n1 - n2)
+    | Mul, VInt n1, VInt n2 -> VInt (n1 * n2)
+    | Div, VInt _, VInt 0 -> raise (Div_by_zero e.pos)
+    | Div, VInt n1, VInt n2 -> VInt (n1 / n2)
+    | Mod, VInt _, VInt 0 -> raise (Div_by_zero e.pos)
+    | Mod, VInt n1, VInt n2 -> VInt (n1 mod n2)
+    | Eq,  VInt n1, VInt n2 -> VBool (n1 = n2)
+    | Eq,  VBool b1, VBool b2 -> VBool (b1 = b2)
+    | Eq,  VUnit, VUnit -> VBool true
+    | Neq, VInt n1, VInt n2 -> VBool (n1 <> n2)
+    | Neq, VBool b1, VBool b2 -> VBool (b1 <> b2)
+    | Neq, VUnit, VUnit -> VBool false
+    | Lt,  VInt n1, VInt n2 -> VBool (n1 < n2)
+    | Lte, VInt n1, VInt n2 -> VBool (n1 <= n2)
+    | Gt,  VInt n1, VInt n2 -> VBool (n1 > n2)
+    | Gte, VInt n1, VInt n2 -> VBool (n1 >= n2)
+    | And, VBool b1, VBool b2 -> VBool (b1 && b2)
+    | Or,  VBool b1, VBool b2 -> VBool (b1 || b2)
+    | _ -> assert false)
+  | If (e1, e2, e3) ->
+    (match eval_expr env e1 with
+    | VBool true -> eval_expr env e2
+    | VBool false -> eval_expr env e3
+    | _ -> assert false)
+  | Let {is_rec = false; name; args = []; annot = _; binding; body} ->
+    let v_binding = eval_expr env binding in
+    let env' = Env.add name v_binding env in
+      eval_expr env' body
+  | Let _ -> assert false
+  | Nil -> assert false
+  | Tuple _ -> assert false
+  | Fun _ -> assert false
+  | App _ -> assert false
+  | Match _ -> assert false
 
 let eval (p : prog) : value =
   let rec go env v p =
