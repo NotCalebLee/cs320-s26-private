@@ -252,7 +252,6 @@ type dyn_env = value Env.t
 exception Div_by_zero of pos
 exception Assert_fail of pos
 exception Match_fail of pos
-
 let rec eval_expr (env : dyn_env) (e : expr) : value =
   match e.expr with
   | Unit -> VUnit
@@ -364,6 +363,8 @@ let rec eval_expr (env : dyn_env) (e : expr) : value =
             | _ -> assert false)
        | _ -> assert false)
 
+  | Bop (Cons, _, _) -> assert false
+
   | If (e1, e2, e3) ->
       (match eval_expr env e1 with
        | VBool true -> eval_expr env e2
@@ -381,7 +382,6 @@ let rec eval_expr (env : dyn_env) (e : expr) : value =
   | Fun _ -> assert false
   | App _ -> assert false
   | Match _ -> assert false
-
 let eval (p : prog) : value =
   let rec go env v p =
     match p with
