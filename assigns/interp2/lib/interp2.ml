@@ -259,46 +259,122 @@ let rec eval_expr (env : dyn_env) (e : expr) : value =
   | Bool b -> VBool b
   | Int n -> VInt n
   | Var x -> Env.find x env
+
   | Assert e1 ->
-    (match eval_expr env e1 with
-    | VBool true -> VUnit
-    | VBool false -> raise (Assert_fail e.pos)
-    | _ -> assert false)
+      (match eval_expr env e1 with
+       | VBool true -> VUnit
+       | VBool false -> raise (Assert_fail e.pos)
+       | _ -> assert false)
+
   | Negate e1 ->
-    (match eval_expr env e1 with
-    | VInt n -> VInt (-n)
-    | _ -> assert false)
-  | Bop (op, e1, e2) ->
-    (match op, eval_expr env e1, eval_expr env e2 with
-    | Add, VInt n1, VInt n2 -> VInt (n1 + n2)
-    | Sub, VInt n1, VInt n2 -> VInt (n1 - n2)
-    | Mul, VInt n1, VInt n2 -> VInt (n1 * n2)
-    | Div, VInt _, VInt 0 -> raise (Div_by_zero e.pos)
-    | Div, VInt n1, VInt n2 -> VInt (n1 / n2)
-    | Mod, VInt _, VInt 0 -> raise (Div_by_zero e.pos)
-    | Mod, VInt n1, VInt n2 -> VInt (n1 mod n2)
-    | Eq,  VInt n1, VInt n2 -> VBool (n1 = n2)
-    | Eq,  VBool b1, VBool b2 -> VBool (b1 = b2)
-    | Eq,  VUnit, VUnit -> VBool true
-    | Neq, VInt n1, VInt n2 -> VBool (n1 <> n2)
-    | Neq, VBool b1, VBool b2 -> VBool (b1 <> b2)
-    | Neq, VUnit, VUnit -> VBool false
-    | Lt,  VInt n1, VInt n2 -> VBool (n1 < n2)
-    | Lte, VInt n1, VInt n2 -> VBool (n1 <= n2)
-    | Gt,  VInt n1, VInt n2 -> VBool (n1 > n2)
-    | Gte, VInt n1, VInt n2 -> VBool (n1 >= n2)
-    | And, VBool b1, VBool b2 -> VBool (b1 && b2)
-    | Or,  VBool b1, VBool b2 -> VBool (b1 || b2)
-    | _ -> assert false)
+      (match eval_expr env e1 with
+       | VInt n -> VInt (-n)
+       | _ -> assert false)
+
+  | Bop (Add, e1, e2) ->
+      (match eval_expr env e1, eval_expr env e2 with
+       | VInt n1, VInt n2 -> VInt (n1 + n2)
+       | _ -> assert false)
+
+  | Bop (Sub, e1, e2) ->
+      (match eval_expr env e1, eval_expr env e2 with
+       | VInt n1, VInt n2 -> VInt (n1 - n2)
+       | _ -> assert false)
+
+  | Bop (Mul, e1, e2) ->
+      (match eval_expr env e1, eval_expr env e2 with
+       | VInt n1, VInt n2 -> VInt (n1 * n2)
+       | _ -> assert false)
+
+  | Bop (Div, e1, e2) ->
+      (match eval_expr env e2 with
+       | VInt 0 -> raise (Div_by_zero e.pos)
+       | VInt n2 ->
+           (match eval_expr env e1 with
+            | VInt n1 -> VInt (n1 / n2)
+            | _ -> assert false)
+       | _ -> assert false)
+
+  | Bop (Mod, e1, e2) ->
+      (match eval_expr env e2 with
+       | VInt 0 -> raise (Div_by_zero e.pos)
+       | VInt n2 ->
+           (match eval_expr env e1 with
+            | VInt n1 -> VInt (n1 mod n2)
+            | _ -> assert false)
+       | _ -> assert false)
+
+  | Bop (Eq, e1, e2) ->
+      (match eval_expr env e1, eval_expr env e2 with
+       | VInt n1, VInt n2 -> VBool (n1 = n2)
+       | VBool b1, VBool b2 -> VBool (b1 = b2)
+       | VUnit, VUnit -> VBool true
+       | _ -> assert false)
+
+  | Bop (Neq, e1, e2) ->
+      (match eval_expr env e1, eval_expr env e2 with
+       | VInt n1, VInt n2 -> VBool (n1 <> n2)
+       | VBool b1, VBool b2 -> VBool (b1 <> b2)
+       | VUnit, VUnit -> VBool false
+       | _ -> assert false)
+
+  | Bop (Lt, e1, e2) ->
+      (match eval_expr env e1, eval_expr env e2 with
+       | VInt n1, VInt n2 -> VBool (n1 < n2)
+       | VBool b1, VBool b2 -> VBool (b1 < b2)
+       | VUnit, VUnit -> VBool false
+       | _ -> assert false)
+
+  | Bop (Lte, e1, e2) ->
+      (match eval_expr env e1, eval_expr env e2 with
+       | VInt n1, VInt n2 -> VBool (n1 <= n2)
+       | VBool b1, VBool b2 -> VBool (b1 <= b2)
+       | VUnit, VUnit -> VBool true
+       | _ -> assert false)
+
+  | Bop (Gt, e1, e2) ->
+      (match eval_expr env e1, eval_expr env e2 with
+       | VInt n1, VInt n2 -> VBool (n1 > n2)
+       | VBool b1, VBool b2 -> VBool (b1 > b2)
+       | VUnit, VUnit -> VBool false
+       | _ -> assert false)
+
+  | Bop (Gte, e1, e2) ->
+      (match eval_expr env e1, eval_expr env e2 with
+       | VInt n1, VInt n2 -> VBool (n1 >= n2)
+       | VBool b1, VBool b2 -> VBool (b1 >= b2)
+       | VUnit, VUnit -> VBool true
+       | _ -> assert false)
+
+  | Bop (And, e1, e2) ->
+      (match eval_expr env e1 with
+       | VBool true ->
+           (match eval_expr env e2 with
+            | VBool b -> VBool b
+            | _ -> assert false)
+       | VBool false -> VBool false
+       | _ -> assert false)
+
+  | Bop (Or, e1, e2) ->
+      (match eval_expr env e1 with
+       | VBool true -> VBool true
+       | VBool false ->
+           (match eval_expr env e2 with
+            | VBool b -> VBool b
+            | _ -> assert false)
+       | _ -> assert false)
+
   | If (e1, e2, e3) ->
-    (match eval_expr env e1 with
-    | VBool true -> eval_expr env e2
-    | VBool false -> eval_expr env e3
-    | _ -> assert false)
+      (match eval_expr env e1 with
+       | VBool true -> eval_expr env e2
+       | VBool false -> eval_expr env e3
+       | _ -> assert false)
+
   | Let {is_rec = false; name; args = []; annot = _; binding; body} ->
-    let v_binding = eval_expr env binding in
-    let env' = Env.add name v_binding env in
+      let v_binding = eval_expr env binding in
+      let env' = Env.add name v_binding env in
       eval_expr env' body
+
   | Let _ -> assert false
   | Nil -> assert false
   | Tuple _ -> assert false
