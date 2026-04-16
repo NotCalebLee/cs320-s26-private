@@ -193,18 +193,87 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty, Error_msg.t) result =
     (match type_of_expr ctxt e1, type_of_expr ctxt e2, type_of_expr ctxt e3 with
     | Ok TBool, Ok t2, Ok t3 when t2 = t3 -> Ok t2
     | _ -> assert false)
-  | Let {is_rec = false; name; args = []; annot = _; binding; body} ->
-    (match type_of_expr ctxt binding with
-    | Ok t_binding ->
+  | Let {is_rec = false; name; args = []; annot; binding; body} ->
+    let* t_binding = type_of_expr ctxt binding in
+    let* t_binding =
+      match annot with
+      | None -> Ok t_binding
+      | Some t_annot -> if t_binding = t_annot then Ok t_binding
+        else Error (exp_ty binding.pos t_binding t_annot)
+    in
       let ctxt' = Env.add name t_binding ctxt in
         type_of_expr ctxt' body
-    | Error _ -> assert false)
-  | Let _ -> assert false
-  | Nil -> assert false
-  | Tuple _ -> assert false
-  | Fun _ -> assert false
-  | App _ -> assert false
-  | Match _ -> assert false
+  | Let {is_rec = false; name; args; annot; binding; body} ->
+    let ctxt_binding = add_args_to_ctxt ctxt args in
+    let* t_body = type_of_expr ctxt_binding binding in
+    let t_fun = fun_ty_of_args args t_body in
+    let* t_fun =
+      match annot with
+      | None -> Ok t_fun
+      | Some t_ret ->
+        if t_body = t_ret then Ok (fun_ty_of_args args t_ret)
+        else Error (exp_ty binding.pos t_body t_ret)
+      in
+    let ctxt' = Env.add name t_fun ctxt in
+      type_of_expr ctxt' body
+  | Let {is_rec = true; name; args = []; annot = _; binding = _; body = _} ->
+    Error (missing_rec_arg e.pos)
+  | Let {is_rec = true; name; args; annot = None; binding = _; body = _} ->
+    Error (missing_rec_annot e.pos)
+  | Let {is_rec = true; name; args; annot = Some t_ret; binding; body} ->
+    let t_fun = fun_ty_of_args args t_ret in
+    let ctxt_binding =
+      ctxt
+      |> Env.add name t_fun
+      |> add_args_to_ctxt args
+    in
+    let* t_binding = type_of_expr ctxt_binding binding in
+    if t_binding <> t_ret then
+      Error (exp_ty binding.pos t_binding t_ret)
+    else
+      let ctxt' = Env.add name t_fun ctxt in
+        type_of_expr ctxt' body
+  | Nil -> Ok TInt_list
+  | Tuple es ->
+    let rec go acc = function
+      | [] -> Ok (TTuple (List.rev acc))
+      | e :: rest ->
+        let* t = type_of_expr ctxt e in
+          go (t :: acc) rest
+      in go [] es
+  | Fun (args, body) ->
+    let ctxt' = add_args_to_ctxt ctxt args in
+    let* tbody = type_of_expr ctxt' body in
+      Ok (fun_ty_of_args args tbody)  
+  | App (fn, args) ->
+    let* tf = type_of_expr ctxt fn in
+    let rec apply_ty tf args =
+      match args with
+      | [] -> Ok tf
+      | arg :: rest ->
+        let* targ = type_of_expr ctxt arg in
+          (match tf with
+          | TFun (tparam, tret) -> if targ = tparam then apply_ty tret rest
+            else Error (exp_ty arg.pos targ tparam)
+            | _ -> if rest = [] then Error (not_func fn.pos tf)
+              else Error (too_many_args fn.pos tf))
+        in apply_ty tf args  
+  | Match (e0, branches) ->
+    let* t_scrut = type_of_expr ctxt e0 in
+    (match branches with
+      | [] -> assert false
+      | (p1, e1) :: rest ->
+        let* c1 = type_of_pattern p1 t_scrut in
+        let* t_branch = type_of_expr (Env.union (fun _ _ t2 -> Some t2) ctxt c1) e1 in
+        let rec check = function
+          | [] -> Ok t_branch
+          | (p, e_branch) :: bs ->
+            let* cp = type_of_pattern p t_scrut in
+            let* t = type_of_expr (Env.union (fun _ _ t2 -> Some t2) ctxt cp) e_branch in
+              if t = t_branch then check bs
+              else Error (exp_ty e_branch.pos t t_branch)
+          in
+          check rest)
 
 
 
