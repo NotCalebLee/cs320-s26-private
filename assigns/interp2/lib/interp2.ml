@@ -165,6 +165,57 @@ let bound_several_times pos x =
 
 type ctxt = ty Env.t
 
+let ( let* ) = Result.bind
+
+let rec type_of_pattern (p : pattern) (expected : ty) : (ctxt, Error_msg.t) result =
+  match p.pattern with
+  | PUnit ->
+    if expected = TUnit then Ok Env.empty
+    else Error (exp_pat p.pos TUnit expected)
+  | PBool _ ->
+    if expected = TBool then Ok Env.empty
+    else Error (exp_pat p.pos TBool expected)
+  | PInt _ ->
+    if expected = TInt then Ok Env.empty
+    else Error (exp_pat p.pos TInt expected)
+  | PNil ->
+    if expected = TInt_list then Ok Env.empty
+    else Error (exp_pat p.pos TInt_list expected)
+  | PVar x ->
+    Ok (Env.singleton x expected)
+  | PCons (p1, p2) ->
+    if expected <> TInt_list then
+      Error (exp_pat p.pos TInt_list expected)
+    else
+      let* c1 = type_of_pattern p1 TInt in
+      let* c2 = type_of_pattern p2 TInt_list in
+        Env.fold (fun x t acc ->
+          let* acc = acc in
+            if Env.mem x acc then Error (bound_several_times p.pos x)
+            else Ok (Env.add x t acc)) c2 (Ok c1)
+  | PTuple ps ->
+    (match expected with
+    | TTuple ts ->
+      if List.length ps <> List.length ts then
+        Error (exp_diff_tuple_pat p.pos expected)
+      else
+          let rec go ps ts acc =
+            match ps, ts with
+            | [], [] -> Ok acc
+            | p :: ps', t :: ts' ->
+              let* c = type_of_pattern p t in
+                let* acc =
+                  Env.fold (fun x t acc ->
+                    let* acc = acc in
+                      if Env.mem x acc then Error (bound_several_times p.pos x)
+                      else Ok (Env.add x t acc)) c (Ok acc)
+                in
+                  go ps' ts' acc
+            | _ -> assert false
+          in
+            go ps ts Env.empty
+  | _ -> Error (exp_tuple_pat p.pos expected))
+
 (* Type Checking *)
 
 let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty, Error_msg.t) result =
@@ -204,35 +255,54 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty, Error_msg.t) result =
       let ctxt' = Env.add name t_binding ctxt in
         type_of_expr ctxt' body
   | Let {is_rec = false; name; args; annot; binding; body} ->
-    let ctxt_binding = add_args_to_ctxt ctxt args in
+    let ctxt_binding =
+      List.fold_left (fun acc (x, t) -> Env.add x t acc) ctxt args
+    in
     let* t_body = type_of_expr ctxt_binding binding in
-    let t_fun = fun_ty_of_args args t_body in
+    let t_fun =
+      let rec build args ret =
+        match args with
+        | [] -> ret
+        | (_, t) :: rest -> TFun (t, build rest ret)
+      in
+      build args t_body
+    in
     let* t_fun =
       match annot with
       | None -> Ok t_fun
       | Some t_ret ->
-        if t_body = t_ret then Ok (fun_ty_of_args args t_ret)
-        else Error (exp_ty binding.pos t_body t_ret)
-      in
-    let ctxt' = Env.add name t_fun ctxt in
-      type_of_expr ctxt' body
-  | Let {is_rec = true; name; args = []; annot = _; binding = _; body = _} ->
+        if t_body = t_ret then
+          let rec build args ret =
+            match args with
+            | [] -> ret
+            | (_, t) :: rest -> TFun (t, build rest ret)
+          in
+            Ok (build args t_ret)
+        else
+          Error (exp_ty binding.pos t_body t_ret)
+    in
+    type_of_expr (Env.add name t_fun ctxt) body
+  | Let {is_rec = true; name = _; args = []; annot = _; binding = _; body = _} ->
     Error (missing_rec_arg e.pos)
-  | Let {is_rec = true; name; args; annot = None; binding = _; body = _} ->
+  | Let {is_rec = true; name = _; args = _; annot = None; binding = _; body = _} ->
     Error (missing_rec_annot e.pos)
   | Let {is_rec = true; name; args; annot = Some t_ret; binding; body} ->
-    let t_fun = fun_ty_of_args args t_ret in
+    let t_fun =
+      let rec build args ret =
+        match args with
+        | [] -> ret
+        | (_, t) :: rest -> TFun (t, build rest ret)
+      in
+      build args t_ret
+    in
     let ctxt_binding =
-      ctxt
-      |> Env.add name t_fun
-      |> add_args_to_ctxt args
+      List.fold_left (fun acc (x, t) -> Env.add x t acc) (Env.add name t_fun ctxt) args
     in
     let* t_binding = type_of_expr ctxt_binding binding in
     if t_binding <> t_ret then
       Error (exp_ty binding.pos t_binding t_ret)
     else
-      let ctxt' = Env.add name t_fun ctxt in
-        type_of_expr ctxt' body
+      type_of_expr (Env.add name t_fun ctxt) body
   | Nil -> Ok TInt_list
   | Tuple es ->
     let rec go acc = function
@@ -242,9 +312,16 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty, Error_msg.t) result =
           go (t :: acc) rest
       in go [] es
   | Fun (args, body) ->
-    let ctxt' = add_args_to_ctxt ctxt args in
+    let ctxt' =
+      List.fold_left (fun acc (x, t) -> Env.add x t acc) ctxt args
+    in
     let* tbody = type_of_expr ctxt' body in
-      Ok (fun_ty_of_args args tbody)  
+    let rec build_fun_ty args ret =
+      match args with
+      | [] -> ret
+      | (_, t) :: rest -> TFun (t, build_fun_ty rest ret)
+    in
+    Ok (build_fun_ty args tbody)
   | App (fn, args) ->
     let* tf = type_of_expr ctxt fn in
     let rec apply_ty tf args =
@@ -274,7 +351,6 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty, Error_msg.t) result =
               else Error (exp_ty e_branch.pos t t_branch)
           in
           check rest)
-
 
 
 let type_of (p : prog) : (ty, Error_msg.t) result =
@@ -315,6 +391,32 @@ type value =
 (* Dynamic Environments *)
 
 type dyn_env = value Env.t
+
+let rec match_pattern (v : value) (p : pattern) : dyn_env option =
+  match p.pattern, v with
+  | PUnit, VUnit -> Some Env.empty
+  | PBool b1, VBool b2 when b1 = b2 -> Some Env.empty
+  | PInt n1, VInt n2 when n1 = n2 -> Some Env.empty
+  | PNil, VInt_list [] -> Some Env.empty
+  | PVar x, v -> Some (Env.singleton x v)
+  | PCons (p1, p2), VInt_list (n :: ns) ->
+    (match match_pattern (VInt n) p1, match_pattern (VInt_list ns) p2 with
+    | Some e1, Some e2 ->
+        Some (Env.union (fun _ _ v2 -> Some v2) e1 e2)
+    | _ -> None)
+  | PTuple ps, VTuple vs when List.length ps = List.length vs ->
+    let rec go ps vs acc =
+      match ps, vs with
+      | [], [] -> Some acc
+      | p :: ps', v :: vs' ->
+        (match match_pattern v p with
+        | None -> None
+        | Some env' ->
+          go ps' vs' (Env.union (fun _ _ v2 -> Some v2) acc env'))
+      | _ -> None
+    in
+      go ps vs Env.empty
+  | _ -> None
 
 (* Evaluation *)
 
