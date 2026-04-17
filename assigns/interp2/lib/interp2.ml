@@ -253,8 +253,7 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty, Error_msg.t) result =
     | Cons ->
       if t1 <> TInt then Error (exp_ty e1.pos t1 TInt)
       else if t2 <> TInt_list then Error (exp_ty e2.pos t2 TInt_list)
-      else Ok TInt_list
-    | _ -> assert false)
+      else Ok TInt_list)
   | If (e1, e2, e3) ->
     let* t1 = type_of_expr ctxt e1 in
     if t1 <> TBool then Error (exp_ty e1.pos t1 TBool)
@@ -355,12 +354,12 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty, Error_msg.t) result =
         | _ ->
           Error (too_many_args fn.pos current_ty))
     in
-    match args with
+    (match args with
     | [] -> Ok tf
     | _ -> 
       (match tf with
       | TFun _ -> apply_ty tf args
-      | _ -> Error (not_func fn.pos tf))
+      | _ -> Error (not_func fn.pos tf)))
   | Match (e0, branches) ->
     let* t_scrut = type_of_expr ctxt e0 in
     (match branches with
