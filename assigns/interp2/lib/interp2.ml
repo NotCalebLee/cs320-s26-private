@@ -566,22 +566,34 @@ let rec eval_expr (env : dyn_env) (e : expr) : value =
         (match vf with
         | VClos {env = clos_env; name; args = x :: xs; body} ->
           let v_arg = eval_expr env arg in
-          let env' = Env.add x v_arg clos_env in
-            if xs = [] then
-              let env'' =
-                match name with
-                | None -> env'
-                | Some f -> Env.add f vf env'
-              in
-                apply (eval_expr env'' body) rest
-            else
-              let vf' =
-                VClos {env = env'; name; args = xs; body;}
-              in
-                apply vf' rest
-        | _ -> assert false)
-      in
-        apply (eval_expr env fn) args
+            let self =
+              match name with
+              | None -> None
+              | Some f ->
+                (match Env.find_opt f clos_env with
+                | Some v -> Some (f, v)
+                | None -> Some (f, vf))
+            in
+            let env' = Env.add x v_arg clos_env in
+              if xs = [] then
+                let env'' =
+                  match self with
+                  | None -> env'
+                  | Some (f, vself) -> Env.add f vself env'
+                in
+                  apply (eval_expr env'' body) rest
+              else
+                let env'' =
+                  match self with
+                  | None -> env'
+                  | Some (f, vself) -> Env.add f vself env'
+                in
+                  let vf' = VClos {env = env''; name; args = xs; body;}
+                  in
+                    apply vf' rest
+          | _ -> assert false)
+    in
+      apply (eval_expr env fn) args
   | Let {is_rec = false; name; args = []; annot = _; binding; body} ->
     let v_binding = eval_expr env binding in
     let env' = Env.add name v_binding env in
