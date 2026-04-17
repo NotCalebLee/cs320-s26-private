@@ -352,7 +352,7 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty, Error_msg.t) result =
           if targ = tparam then apply_ty tret rest
           else Error (exp_ty arg.pos targ tparam)
         | _ ->
-          Error (too_many_args fn.pos current_ty))
+          Error (too_many_args e.pos current_ty))
     in
     (match args with
     | [] -> Ok tf
@@ -363,7 +363,7 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty, Error_msg.t) result =
   | Match (e0, branches) ->
     let* t_scrut = type_of_expr ctxt e0 in
     (match branches with
-      | [] -> assert false
+      | [] -> Error (Error_msg.mk e.pos "empty match expression")
       | (p1, e1) :: rest ->
         let* c1 = type_of_pattern p1 t_scrut in
         let* t_branch = type_of_expr (Env.union (fun _ _ t2 -> Some t2) ctxt c1) e1 in
