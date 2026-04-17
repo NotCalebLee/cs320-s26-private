@@ -455,6 +455,7 @@ let rec eval_expr (env : dyn_env) (e : expr) : value =
   | Bool b -> VBool b
   | Int n -> VInt n
   | Var x -> Env.find x env
+  | Nil -> VInt_list []
   | Assert e1 ->
     (match eval_expr env e1 with
     | VBool true -> VUnit
@@ -464,6 +465,8 @@ let rec eval_expr (env : dyn_env) (e : expr) : value =
     (match eval_expr env e1 with
     | VInt n -> VInt (-n)
     | _ -> assert false)
+  | Tuple es ->
+    VTuple (List.map (eval_expr env) es)
   | Bop (Add, e1, e2) ->
     (match eval_expr env e1, eval_expr env e2 with
     | VInt n1, VInt n2 -> VInt (n1 + n2)
@@ -490,43 +493,43 @@ let rec eval_expr (env : dyn_env) (e : expr) : value =
     | VInt n2 ->
       (match eval_expr env e1 with
       | VInt n1 -> VInt (n1 mod n2)
-      | _ -> assert false)
+        | _ -> assert false)
     | _ -> assert false)
   | Bop (Eq, e1, e2) ->
-    (match eval_expr env e1, eval_expr env e2 with
-    | VInt n1, VInt n2 -> VBool (n1 = n2)
-    | VBool b1, VBool b2 -> VBool (b1 = b2)
-    | VUnit, VUnit -> VBool true
-    | _ -> assert false)
+    VBool (eval_expr env e1 = eval_expr env e2)
   | Bop (Neq, e1, e2) ->
-    (match eval_expr env e1, eval_expr env e2 with
-    | VInt n1, VInt n2 -> VBool (n1 <> n2)
-    | VBool b1, VBool b2 -> VBool (b1 <> b2)
-    | VUnit, VUnit -> VBool false
-    | _ -> assert false)
+    VBool (eval_expr env e1 <> eval_expr env e2)
   | Bop (Lt, e1, e2) ->
     (match eval_expr env e1, eval_expr env e2 with
     | VInt n1, VInt n2 -> VBool (n1 < n2)
     | VBool b1, VBool b2 -> VBool (b1 < b2)
     | VUnit, VUnit -> VBool false
+    | VInt_list l1, VInt_list l2 -> VBool (l1 < l2)
+    | VTuple vs1, VTuple vs2 -> VBool (vs1 < vs2)
     | _ -> assert false)
   | Bop (Lte, e1, e2) ->
     (match eval_expr env e1, eval_expr env e2 with
     | VInt n1, VInt n2 -> VBool (n1 <= n2)
     | VBool b1, VBool b2 -> VBool (b1 <= b2)
     | VUnit, VUnit -> VBool true
+    | VInt_list l1, VInt_list l2 -> VBool (l1 <= l2)
+    | VTuple vs1, VTuple vs2 -> VBool (vs1 <= vs2)
     | _ -> assert false)
   | Bop (Gt, e1, e2) ->
     (match eval_expr env e1, eval_expr env e2 with
     | VInt n1, VInt n2 -> VBool (n1 > n2)
     | VBool b1, VBool b2 -> VBool (b1 > b2)
     | VUnit, VUnit -> VBool false
+    | VInt_list l1, VInt_list l2 -> VBool (l1 > l2)
+    | VTuple vs1, VTuple vs2 -> VBool (vs1 > vs2)
     | _ -> assert false)
   | Bop (Gte, e1, e2) ->
     (match eval_expr env e1, eval_expr env e2 with
     | VInt n1, VInt n2 -> VBool (n1 >= n2)
     | VBool b1, VBool b2 -> VBool (b1 >= b2)
     | VUnit, VUnit -> VBool true
+    | VInt_list l1, VInt_list l2 -> VBool (l1 >= l2)
+    | VTuple vs1, VTuple vs2 -> VBool (vs1 >= vs2)
     | _ -> assert false)
   | Bop (And, e1, e2) ->
     (match eval_expr env e1 with
@@ -544,22 +547,67 @@ let rec eval_expr (env : dyn_env) (e : expr) : value =
         | VBool b -> VBool b
         | _ -> assert false)
     | _ -> assert false)
-  | Bop (Cons, _, _) -> assert false
+  | Bop (Cons, e1, e2) ->
+    (match eval_expr env e1, eval_expr env e2 with
+    | VInt n, VInt_list ns -> VInt_list (n :: ns)
+    | _ -> assert false)
   | If (e1, e2, e3) ->
     (match eval_expr env e1 with
     | VBool true -> eval_expr env e2
     | VBool false -> eval_expr env e3
     | _ -> assert false)
+  | Fun (args, body) ->
+    VClos {env; name = None; args = List.map fst args; body;}
+  | App (fn, args) ->
+    let rec apply vf args =
+      match args with
+      | [] -> vf
+      | arg :: rest ->
+        (match vf with
+        | VClos {env = clos_env; name; args = x :: xs; body} ->
+          let v_arg = eval_expr env arg in
+          let env' = Env.add x v_arg clos_env in
+            if xs = [] then
+              let env'' =
+                match name with
+                | None -> env'
+                | Some f -> Env.add f vf env'
+              in
+                apply (eval_expr env'' body) rest
+            else
+              let vf' =
+                VClos {env = env'; name; args = xs; body;}
+              in
+                apply vf' rest
+        | _ -> assert false)
+      in
+        apply (eval_expr env fn) args
   | Let {is_rec = false; name; args = []; annot = _; binding; body} ->
     let v_binding = eval_expr env binding in
     let env' = Env.add name v_binding env in
       eval_expr env' body
-  | Let _ -> assert false
-  | Nil -> assert false
-  | Tuple _ -> assert false
-  | Fun _ -> assert false
-  | App _ -> assert false
-  | Match _ -> assert false
+  | Let {is_rec = false; name; args; annot = _; binding; body} ->
+    let v_binding =
+      VClos {env; name = None; args = List.map fst args; body = binding;}
+      in
+        let env' = Env.add name v_binding env in
+          eval_expr env' body
+  | Let {is_rec = true; name; args; annot = _; binding; body} ->
+    let v_binding =
+      VClos {env; name = Some name; args = List.map fst args; body = binding;}
+      in
+        let env' = Env.add name v_binding env in
+          eval_expr env' body
+  | Match (e0, branches) ->
+    let v0 = eval_expr env e0 in
+      let rec go = function
+      | [] -> raise (Match_fail e.pos)
+      | (p, e_branch) :: rest ->
+        (match match_pattern v0 p with
+        | Some penv -> eval_expr (Env.union (fun _ v1 _ -> Some v1) env penv) e_branch
+        | None -> go rest)
+      in
+        go branches
 
 let eval (p : prog) : value =
   let rec go env v p =
