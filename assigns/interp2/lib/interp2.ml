@@ -192,32 +192,35 @@ let rec type_of_pattern (p : pattern) (expected : ty) : (ctxt, Error_msg.t) resu
       Env.fold
         (fun x t acc ->
           let* acc = acc in
-          if Env.mem x acc then Error (bound_several_times p2.pos x)
+          if x <> "_" && Env.mem x acc then Error (bound_several_times p2.pos x)
           else Ok (Env.add x t acc))
         c2
         (Ok c1)
-  | PTuple ps ->
+| PTuple ps ->
     (match expected with
     | TTuple ts ->
-      if List.length ps <> List.length ts then
-        Error (exp_diff_tuple_pat p.pos expected)
-      else
+        if List.length ps <> List.length ts then
+          Error (exp_diff_tuple_pat p.pos expected)
+        else
           let rec go ps ts acc =
             match ps, ts with
             | [], [] -> Ok acc
             | p :: ps', t :: ts' ->
-              let* c = type_of_pattern p t in
+                let* c = type_of_pattern p t in
                 let* acc =
-                  Env.fold (fun x t acc ->
-                    let* acc = acc in
-                      if Env.mem x acc then Error (bound_several_times p.pos x)
-                      else Ok (Env.add x t acc)) c (Ok acc)
+                  Env.fold
+                    (fun x t acc ->
+                      let* acc = acc in
+                      if x <> "_" && Env.mem x acc then Error (bound_several_times p.pos x)
+                      else Ok (Env.add x t acc))
+                    c
+                    (Ok acc)
                 in
-                  go ps' ts' acc
+                go ps' ts' acc
             | _ -> assert false
           in
-            go ps ts Env.empty
-  | _ -> Error (exp_tuple_pat p.pos expected))
+          go ps ts Env.empty
+    | _ -> Error (exp_tuple_pat p.pos expected))
 
 (* Type Checking *)
 
