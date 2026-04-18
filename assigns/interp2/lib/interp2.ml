@@ -185,14 +185,17 @@ let rec type_of_pattern (p : pattern) (expected : ty) : (ctxt, Error_msg.t) resu
     Ok (Env.singleton x expected)
   | PCons (p1, p2) ->
     if expected <> TInt_list then
-      Error (exp_pat p2.pos TInt_list expected)
+      Error (exp_pat p.pos TInt_list expected)
     else
       let* c1 = type_of_pattern p1 TInt in
       let* c2 = type_of_pattern p2 TInt_list in
-        Env.fold (fun x t acc ->
+      Env.fold
+        (fun x t acc ->
           let* acc = acc in
-            if Env.mem x acc then Error (bound_several_times p.pos x)
-            else Ok (Env.add x t acc)) c2 (Ok c1)
+          if Env.mem x acc then Error (bound_several_times p2.pos x)
+          else Ok (Env.add x t acc))
+        c2
+        (Ok c1)
   | PTuple ps ->
     (match expected with
     | TTuple ts ->
@@ -340,26 +343,26 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty, Error_msg.t) result =
       | (_, t) :: rest -> TFun (t, build_fun_ty rest ret)
     in
     Ok (build_fun_ty args tbody)
-  | App (fn, args) ->
+| App (fn, args) ->
     let* tf = type_of_expr ctxt fn in
     let rec apply_ty current_ty remaining_args =
       match remaining_args with
       | [] -> Ok current_ty
       | arg :: rest ->
-        (match current_ty with
-        | TFun (tparam, tret) ->
-          let* targ = type_of_expr ctxt arg in
-          if targ = tparam then apply_ty tret rest
-          else Error (exp_ty arg.pos targ tparam)
-        | _ ->
-          Error (too_many_args fn.pos current_ty))
+          (match current_ty with
+          | TFun (tparam, tret) ->
+              let* targ = type_of_expr ctxt arg in
+              if targ = tparam then apply_ty tret rest
+              else Error (exp_ty arg.pos targ tparam)
+          | _ ->
+              Error (too_many_args fn.pos tf))
     in
     (match args with
     | [] -> Ok tf
-    | _ -> 
-      (match tf with
-      | TFun _ -> apply_ty tf args
-      | _ -> Error (not_func fn.pos tf)))
+    | _ ->
+        (match tf with
+        | TFun _ -> apply_ty tf args
+        | _ -> Error (not_func fn.pos tf)))
   | Match (e0, branches) ->
     let* t_scrut = type_of_expr ctxt e0 in
     (match branches with
