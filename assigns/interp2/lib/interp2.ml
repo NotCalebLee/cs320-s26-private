@@ -167,7 +167,7 @@ type ctxt = ty Env.t
 
 let ( let* ) = Result.bind
 
-let rec type_of_pattern (p : pattern) (expected : ty) : (string * (ty * pos)) Env.t result =
+let rec type_of_pattern (p : pattern) (expected : ty) : (ctxt, Error_msg.t) result =
   match p.pattern with
   | PUnit ->
     if expected = TUnit then Ok Env.empty
