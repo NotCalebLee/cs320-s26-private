@@ -358,7 +358,7 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty, Error_msg.t) result =
               if targ = tparam then apply_ty tret rest
               else Error (exp_ty arg.pos targ tparam)
           | _ ->
-              Error (too_many_args fn.pos tf))
+              Error (too_many_args e.pos tf))
     in
     (match args with
     | [] -> Ok tf
