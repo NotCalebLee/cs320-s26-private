@@ -502,38 +502,17 @@ let rec eval_expr (env : dyn_env) (e : expr) : value =
     VBool (eval_expr env e1 = eval_expr env e2)
   | Bop (Neq, e1, e2) ->
     VBool (eval_expr env e1 <> eval_expr env e2)
-  | Bop (Lt, e1, e2) ->
-    (match eval_expr env e1, eval_expr env e2 with
-    | VInt n1, VInt n2 -> VBool (n1 < n2)
-    | VBool b1, VBool b2 -> VBool (b1 < b2)
-    | VUnit, VUnit -> VBool false
-    | VInt_list l1, VInt_list l2 -> VBool (l1 < l2)
-    | VTuple vs1, VTuple vs2 -> VBool (vs1 < vs2)
-    | _ -> assert false)
-  | Bop (Lte, e1, e2) ->
-    (match eval_expr env e1, eval_expr env e2 with
-    | VInt n1, VInt n2 -> VBool (n1 <= n2)
-    | VBool b1, VBool b2 -> VBool (b1 <= b2)
-    | VUnit, VUnit -> VBool true
-    | VInt_list l1, VInt_list l2 -> VBool (l1 <= l2)
-    | VTuple vs1, VTuple vs2 -> VBool (vs1 <= vs2)
-    | _ -> assert false)
-  | Bop (Gt, e1, e2) ->
-    (match eval_expr env e1, eval_expr env e2 with
-    | VInt n1, VInt n2 -> VBool (n1 > n2)
-    | VBool b1, VBool b2 -> VBool (b1 > b2)
-    | VUnit, VUnit -> VBool false
-    | VInt_list l1, VInt_list l2 -> VBool (l1 > l2)
-    | VTuple vs1, VTuple vs2 -> VBool (vs1 > vs2)
-    | _ -> assert false)
-  | Bop (Gte, e1, e2) ->
-    (match eval_expr env e1, eval_expr env e2 with
-    | VInt n1, VInt n2 -> VBool (n1 >= n2)
-    | VBool b1, VBool b2 -> VBool (b1 >= b2)
-    | VUnit, VUnit -> VBool true
-    | VInt_list l1, VInt_list l2 -> VBool (l1 >= l2)
-    | VTuple vs1, VTuple vs2 -> VBool (vs1 >= vs2)
-    | _ -> assert false)
+| Bop (Lt, e1, e2) ->
+    VBool (eval_expr env e1 < eval_expr env e2)
+
+| Bop (Lte, e1, e2) ->
+    VBool (eval_expr env e1 <= eval_expr env e2)
+
+| Bop (Gt, e1, e2) ->
+    VBool (eval_expr env e1 > eval_expr env e2)
+
+| Bop (Gte, e1, e2) ->
+    VBool (eval_expr env e1 >= eval_expr env e2)
   | Bop (And, e1, e2) ->
     (match eval_expr env e1 with
     | VBool true ->
