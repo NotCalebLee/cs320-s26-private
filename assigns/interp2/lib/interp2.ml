@@ -185,7 +185,7 @@ let rec type_of_pattern (p : pattern) (expected : ty) : (ctxt, Error_msg.t) resu
     Ok (Env.singleton x expected)
   | PCons (p1, p2) ->
     if expected <> TInt_list then
-      Error (exp_pat p.pos TInt_list expected)
+      Error (exp_pat p2.pos TInt_list expected)
     else
       let* c1 = type_of_pattern p1 TInt in
       let* c2 = type_of_pattern p2 TInt_list in
@@ -352,7 +352,7 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty, Error_msg.t) result =
           if targ = tparam then apply_ty tret rest
           else Error (exp_ty arg.pos targ tparam)
         | _ ->
-          Error (too_many_args e.pos current_ty))
+          Error (too_many_args fn.pos current_ty))
     in
     (match args with
     | [] -> Ok tf
