@@ -163,7 +163,54 @@ type constr = ty * ty
 let fresh () = TParam (_gensym ())
 
 let type_of_expr (ctxt : ctxt) (e : expr) : (ty_scheme, Error_msg.t) result =
-  ignore (ctxt, e); assert false
+  let rec go e = 
+    match e.expr with 
+    | Unit -> Ok ([], TUnit)
+    | Bool _ -> Ok ([], TBool)
+    | Int _ -> Ok ([], TInt)
+    | String _ -> Ok ([], TString)
+
+    | Negate e1 -> 
+      begin match go e1 with
+      | Ok (_, TInt) -> Ok ([], TInt)
+      | Ok (_, t) -> Error (exp_ty e.pos t TInt)
+      | Error e -> Error e
+      end
+    | Bop (op, e1, e2) ->
+      begin match op with
+      | Add | Sub | Mul | Div | Mod -> 
+        begin match go e1, go e2 with
+        | Ok (_, TInt), Ok (_, TInt) -> Ok ([], TInt)
+        | Ok (_, t), Ok (_, _) -> Error (exp_ty e1.pos t TInt)
+        | Error e, _ -> Error e
+        | _, Error e -> Error e
+        end
+      | And | Or -> 
+        begin match go e1, go e2 with
+        | Ok (_, TBool), Ok (_, TBool) -> Ok ([], TBool)
+        | Ok (_, t), Ok (_, _) -> Error (exp_ty e1.pos t TBool)
+        | Error e, _ -> Error e
+        | _, Error e -> Error e
+        end
+      | Concat -> 
+        begin match go e1, go e2 with
+        | Ok (_, TString), Ok (_, TString) -> Ok ([], TString)
+        | Ok (_, t), Ok (_, _) -> Error (exp_ty e1.pos t TString)
+        | Error e, _ -> Error e
+        | _, Error e -> Error e
+        end
+      | Eq | Neq | Lt | Lte | Gt | Gte -> 
+        begin match go e1, go e2 with
+        | Ok (_, t1), Ok (_, t2) -> 
+          if t1 = t2 then Ok ([], TBool)
+          else Error (exp_ty e2.pos t2 t1)
+        | Error e, _ -> Error e
+        | _, Error e -> Error e
+        end
+      end
+
+    | _ -> assert false
+  in ignore ctxt; go e
 
 let rec nub l =
   match l with
