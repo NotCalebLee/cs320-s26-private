@@ -188,22 +188,28 @@ let type_of_expr (ctxt : ctxt) (e : expr) : (ty_scheme, Error_msg.t) result =
       | And | Or -> 
         begin match go e1, go e2 with
         | Ok (_, TBool), Ok (_, TBool) -> Ok ([], TBool)
-        | Ok (_, t), Ok (_, _) -> Error (exp_ty e1.pos t TBool)
+        | Ok (_, t1), Ok (_, t2) ->
+          if t1 <> TBool then Error (exp_ty e1.pos t1 TBool)
+          else if t2 <> TBool then Error (exp_ty e2.pos t2 TBool)
+          else Ok ([], TBool)        
         | Error e, _ -> Error e
         | _, Error e -> Error e
         end
       | Concat -> 
         begin match go e1, go e2 with
         | Ok (_, TString), Ok (_, TString) -> Ok ([], TString)
-        | Ok (_, t), Ok (_, _) -> Error (exp_ty e1.pos t TString)
+        | Ok (_, t1), Ok (_, t2) -> 
+          if t1 <> TString then Error (exp_ty e1.pos t1 TString)
+          else if t2 <> TString then Error (exp_ty e2.pos t2 TString)
+          else Ok ([], TString)
         | Error e, _ -> Error e
         | _, Error e -> Error e
         end
       | Eq | Neq | Lt | Lte | Gt | Gte -> 
         begin match go e1, go e2 with
         | Ok (_, t1), Ok (_, t2) -> 
-          if t1 = t2 then Ok ([], TBool)
-          else Error (exp_ty e2.pos t2 t1)
+          if t1 <> t2 then Error (exp_ty e2.pos t2 t1)
+          else Ok ([], TBool)
         | Error e, _ -> Error e
         | _, Error e -> Error e
         end
