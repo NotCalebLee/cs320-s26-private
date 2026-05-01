@@ -294,6 +294,7 @@ let type_of_expr (ctxt : ctxt) (e : expr) : (ty_scheme, Error_msg.t) result =
                 Error (exp_ty binding.pos binding_ty fresh_ty)
           | Error e -> Error e 
           end
+
     | Tuple l -> 
       let rec type_all l = 
         match l with
@@ -309,6 +310,38 @@ let type_of_expr (ctxt : ctxt) (e : expr) : (ty_scheme, Error_msg.t) result =
       | Ok ts -> Ok ([], TTuple ts)
       | Error e -> Error e 
       end 
+    
+    | Assert e1 -> 
+      begin match e1.expr with
+      | Bool false -> Ok ([], fresh ())
+      | _-> 
+        begin match go ctxt e1 with
+        | Ok (_, TBool) -> Ok ([], TUnit)
+        | Ok (_, t) -> Error (exp_ty e1.pos t TBool)
+        | Error e -> Error e 
+        end
+      end
+    
+    
+    | Cons (name, arg_opt) -> 
+      begin match Env.find_opt name ctxt with 
+      | None -> Error (unknown_cons e.pos name)
+      | Some scheme -> 
+        let cons_ty = instantiate scheme in 
+          begin match cons_ty, arg_opt with
+          | TFun (expected_arg_ty, ret_ty), Some arg ->
+            begin match go ctxt arg with 
+            | Ok (_, actual_arg_ty) -> 
+              if actual_arg_ty = expected_arg_ty then Ok([], ret_ty)
+              else Error (exp_ty arg.pos actual_arg_ty expected_arg_ty)
+            | Error e -> Error e 
+            end
+          | TFun _, None -> Error (cons_exp_args e.pos name)
+          | ty, None -> Ok ([], ty)
+          | _, Some _ -> Error (cons_exp_no_args e.pos name)
+          end
+      end
+
 
       
     | _ -> assert false
@@ -521,6 +554,38 @@ let rec eval_expr (env : dyn_env) (e : Ast.Expr.t) : value =
       | _ -> assert false
       end
     | Annot (e1, _) -> eval_expr env e1
+
+    | Tuple l -> VTuple (List.map (eval_expr env) l)
+
+    | Assert e1 -> 
+      begin match eval_expr env e1 with
+      | VBool true -> VUnit
+      | VBool false -> raise (Assert_fail e.pos)
+      | _ -> assert false
+      end
+
+    | Cons (name, None) -> VCons (name, None)
+
+    | Cons (name, Some arg) -> 
+      let v = eval_expr env arg 
+      in VCons (name, Some v)
+      
+    | Let {is_rec; name; binding; body} -> 
+      if is_rec then
+        begin match binding.expr with 
+        | Fun((arg, _), fun_body) -> 
+          let clos = VClos{env = env; name = Some name; arg = arg; body = fun_body;}
+          in 
+          let env' = Env.add name clos env 
+          in eval_expr env' body
+        | _ -> assert false
+        end 
+      else
+        let v = eval_expr env binding in 
+        let env' = Env.add name v env 
+        in eval_expr env' body  
+
+
     | _ -> assert false
     
 
