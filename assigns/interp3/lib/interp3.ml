@@ -273,6 +273,34 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty_scheme, Error_msg.t) result 
       | Error e, _ -> Error e
       |_, Error e -> Error e
       end
+  | Let of
+      {
+        is_rec : bool;
+        name : string;
+        binding : expr;
+        body : expr;
+      }
+    | Let {is_rec; name; binding; body} ->
+      if not is_rec then 
+        begin match go ctxt binding with 
+        | Ok (_, binding_ty) ->
+          let ctxt' = Env.add name ([], binding_ty) ctxt in 
+            go ctxt' body
+        | Error e -> Error e
+        end
+      else
+        let fresh_ty = fresh () in 
+        let ctxt_with_name = Env.add name ([], fresh_ty) ctxt in 
+          match go ctxt_with_name binding with 
+          | Ok (_, binding_ty) -> 
+              if fresh_ty = binding_ty then
+                let ctxt' = Env.add name ([], binding_ty) ctxt in 
+                  go ctxt' body
+              else 
+                Error (exp_ty binding.pos binding_ty fresh_ty)
+          | Error e -> Error e 
+          end
+          
       
     | _ -> assert false
   in go e
@@ -479,9 +507,7 @@ let rec eval_expr (env : dyn_env) (e : Ast.Expr.t) : value =
         let new_env = Env.add arg v2 clos_env in
           eval_expr new_env body
       | VClos {env = clos_env; name = Some f; arg; body} -> 
-        let new_env = clos_env
-        |> Env.add f v1
-        |> Env.add arg v2
+        let new_env = Env.add arg v2 (Env.add f v1 clos_env)
         in eval_expr new_env body
       | _ -> assert false
       end
