@@ -162,6 +162,26 @@ type constr = ty * ty
 
 let fresh () = TParam (_gensym ())
 
+(* Helper *)
+let rec subst_ty (x : string) (r : ty) (t : ty) : ty =
+  match t with 
+  | TUnit | TBool | TInt | TString -> t
+  | TParam y -> if x = y then r 
+    else t
+  | TTuple ts -> TTuple (List.map (subst_ty x r) ts)
+  | TAdt (ts, name) -> TAdt (List.map (subst_ty x r) ts, name)
+  | TFun (t1, t2) -> TFun(subst_ty x r t1, subst_ty x r t2)
+
+let instantiate (vars, t : ty_scheme) : ty =
+  let rec go vars t = 
+    match vars with
+    | [] -> t
+    | x :: xs -> 
+      let fresh_ty = fresh() in 
+        go xs (subst_ty x fresh_ty t)
+    in 
+      go vars t
+
 let type_of_expr (ctxt : ctxt) (e : expr) : (ty_scheme, Error_msg.t) result =
   let rec go e = 
     match e.expr with 
@@ -214,9 +234,13 @@ let type_of_expr (ctxt : ctxt) (e : expr) : (ty_scheme, Error_msg.t) result =
         | _, Error e -> Error e
         end
       end
-
+    | Var x -> 
+      begin match Env.find_opt x ctxt with 
+      | Some scheme -> Ok([], instantiate scheme)
+      | None -> Error (unknown_var e.pos x)
+      end
     | _ -> assert false
-  in ignore ctxt; go e
+  in go e
 
 let rec nub l =
   match l with
