@@ -433,6 +433,19 @@ exception Assert_fail of pos
 exception Match_fail of pos
 exception Compare_fun_val of pos
 
+
+let rec pattern_match v p : dyn_env option = 
+  begin match p.pattern, v with 
+  | PWild, _ -> Some Env.empty
+  | PVar x, _ -> Some (Env.singleton x v)
+  | PUnit, VUnit -> Some Env.empty
+  | PBool b1, VBool b2 when b1 = b2 -> Some Env.empty
+  | PInt n1, VInt n2 when n1 = n2 -> Some Env.empty
+  | PString s1, VString s2 when s1 = s2 -> Some Env.empty
+  | PCons (c1, Some p), VCons (c2, Some v) when c1 = c2 -> pattern_match v p 
+  | _ -> None
+  end
+
 let rec eval_expr (env : dyn_env) (e : Ast.Expr.t) : value =
   match e.expr with
   | Unit -> VUnit
