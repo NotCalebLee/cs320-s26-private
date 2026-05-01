@@ -182,7 +182,7 @@ let instantiate (vars, t : ty_scheme) : ty =
     in 
       go vars t
 
-let type_of_expr (ctxt : ctxt) (e : expr) : (ty_scheme, Error_msg.t) result =
+let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty_scheme, Error_msg.t) result =
   let rec go e = 
     match e.expr with 
     | Unit -> Ok ([], TUnit)
@@ -251,6 +251,29 @@ let type_of_expr (ctxt : ctxt) (e : expr) : (ty_scheme, Error_msg.t) result =
       | Some scheme -> Ok([], instantiate scheme)
       | None -> Error (unknown_var e.pos x)
       end
+
+    | Fun ((x, ty_opt), body) -> 
+      let arg_ty = 
+        match ty_opt with
+        | Some t -> t
+        | None -> fresh ()
+      in
+      let ctxt' = Env.add x ([], arg_ty) ctxt in 
+        begin match type_of_expr ctxt' body with 
+        | Ok (_, body_ty) -> Ok ([], TFun (arg_ty, body_ty))
+        | Error e -> Error e
+        end
+    
+    | App (e1, e2) ->
+      begin match go e1, go e2 with
+      | Ok (_, TFun (arg_ty, ret_ty)), Ok (_, actual_arg_ty) -> 
+        if actual_arg_ty = arg_ty then Ok([], ret_ty)
+        else Error (exp_ty e2.pos actual_arg_ty arg_ty)
+      | Ok _, Ok _ -> Error (invalid_app e1.pos)
+      | Error e, _ -> Error e
+      |_, Error e -> Error e
+      end
+      
     | _ -> assert false
   in go e
 
