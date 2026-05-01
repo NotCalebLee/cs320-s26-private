@@ -266,9 +266,9 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty_scheme, Error_msg.t) result 
     
     | App (e1, e2) ->
       begin match go e1, go e2 with
-      | Ok (_, TFun (arg_ty, ret_ty)), Ok (_, actual_arg_ty) -> 
-        if actual_arg_ty = arg_ty then Ok([], ret_ty)
-        else Error (exp_ty e2.pos actual_arg_ty arg_ty)
+      | Ok (_, TFun (arg_ty, ret_ty)), Ok (_, body_ty) -> 
+        if body_ty = arg_ty then Ok([], ret_ty)
+        else Error (exp_ty e2.pos body_ty arg_ty)
       | Ok _, Ok _ -> Error (invalid_app e1.pos)
       | Error e, _ -> Error e
       |_, Error e -> Error e
@@ -363,8 +363,131 @@ exception Assert_fail of pos
 exception Match_fail of pos
 exception Compare_fun_val of pos
 
-let eval_expr (env : dyn_env) (e : Ast.Expr.t) : value =
-  ignore (env, e); assert false
+let rec eval_expr (env : dyn_env) (e : Ast.Expr.t) : value =
+  match e.expr with
+  | Unit -> VUnit
+  | Bool b -> VBool b
+  | Int n -> VInt n
+  | String s -> VString s
+  | Var x -> Env.find x env 
+  | Negate e1 -> 
+    begin match eval_expr env e1 with 
+    | VInt n -> VInt (-n)
+    | _ -> assert false
+    end
+  | Bop (op, e1, e2) -> 
+    begin match op with
+    | Add -> 
+      begin match eval_expr env e1, eval_expr env e2 with
+      | VInt n1, VInt n2 -> VInt (n1 + n2)
+      | _ -> assert false
+      end
+    | Sub -> 
+      begin match eval_expr env e1, eval_expr env e2 with
+      | VInt n1, VInt n2 -> VInt (n1 - n2)
+      | _ -> assert false
+      end
+    | Mul -> 
+      begin match eval_expr env e1, eval_expr env e2 with
+      | VInt n1, VInt n2 -> VInt (n1 * n2)
+      | _ -> assert false
+      end
+    | Div -> 
+      begin match eval_expr env e2 with
+      | VInt 0 -> raise (Div_by_zero e.pos)
+      | VInt n2 -> 
+        begin match eval_expr env e1 with
+        | VInt n1 -> VInt (n1 / n2)
+        | _ -> assert false
+        end
+      | _ -> assert false
+      end
+    | Mod -> 
+      begin match eval_expr env e2 with
+      | VInt 0 -> raise (Div_by_zero e.pos)
+      | VInt n2 -> 
+        begin match eval_expr env e1 with
+        | VInt n1 -> VInt (n1 mod n2)
+        | _ -> assert false
+        end
+      | _ -> assert false
+      end
+    | And -> 
+      begin match eval_expr env e1 with 
+      | VBool false -> VBool false
+      | VBool true -> eval_expr env e2
+      | _ -> assert false
+      end
+    | Or -> 
+      begin match eval_expr env e1 with 
+      | VBool true -> VBool true
+      | VBool false -> eval_expr env e2
+      | _ -> assert false
+      end
+    | Concat -> 
+      begin match eval_expr env e1, eval_expr env e2 with
+      | VString s1, VString s2 -> VString (s1 ^ s2)
+      | _ -> assert false
+      end
+    | Eq -> VBool (eval_expr env e1 = eval_expr env e2)
+    | Neq -> VBool (eval_expr env e1 <> eval_expr env e2)
+    | Lt -> 
+      begin match eval_expr env e1, eval_expr env e2 with
+      | VInt n1, VInt n2 -> VBool (n1 < n2)
+      | VString s1, VString s2 -> VBool (s1 < s2)
+      | VBool b1, VBool b2 -> VBool (b1 < b2)
+      | _ -> assert false
+      end
+    | Lte -> 
+      begin match eval_expr env e1, eval_expr env e2 with
+      | VInt n1, VInt n2 -> VBool (n1 <= n2)
+      | VString s1, VString s2 -> VBool (s1 <= s2)
+      | VBool b1, VBool b2 -> VBool (b1 <= b2)
+      | _ -> assert false
+      end
+    | Gt -> 
+      begin match eval_expr env e1, eval_expr env e2 with
+      | VInt n1, VInt n2 -> VBool (n1 > n2)
+      | VString s1, VString s2 -> VBool (s1 > s2)
+      | VBool b1, VBool b2 -> VBool (b1 > b2)
+      | _ -> assert false
+      end
+    | Gte -> 
+      begin match eval_expr env e1, eval_expr env e2 with
+      | VInt n1, VInt n2 -> VBool (n1 >= n2)
+      | VString s1, VString s2 -> VBool (s1 >= s2)
+      | VBool b1, VBool b2 -> VBool (b1 >= b2)
+      | _ -> assert false
+      end
+    end
+
+    | If (e1, e2, e3) -> 
+      begin match eval_expr env e1 with 
+      | VBool true -> eval_expr env e2
+      | VBool false -> eval_expr env e3
+      | _ -> assert false
+      end
+    
+    | Fun ((arg, _), body) -> 
+      VClos {env = env; name = None; arg = arg; body = body;}
+    
+    | App (e1, e2) -> 
+      let v1 = eval_expr env e1 in
+      let v2 = eval_expr env e2 in 
+      begin match v1 with 
+      | VClos {env = clos_env; name = None; arg; body} -> 
+        let new_env = Env.add arg v2 clos_env in
+          eval_expr new_env body
+      | VClos {env = clos_env; name = Some f; arg; body} -> 
+        let new_env = clos_env
+        |> Env.add f v1
+        |> Env.add arg v2
+        in eval_expr new_env body
+      | _ -> assert false
+      end
+    | Annot (e1, _) -> eval_expr env e1
+    | _ -> assert false
+    
 
 let eval (p : stmt list) : value =
   let rec go env v p =
