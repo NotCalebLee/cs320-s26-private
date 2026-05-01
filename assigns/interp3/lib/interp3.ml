@@ -183,6 +183,17 @@ let instantiate (vars, t : ty_scheme) : ty =
       go vars t
 
 let type_of_expr (ctxt : ctxt) (e : expr) : (ty_scheme, Error_msg.t) result =
+  let rec type_pattern ctxt (p : pattern) : (ty * ctxt, Error_msg.t) result =
+  match p.pattern with
+  | PWild -> Ok (fresh (), Env.empty)
+  | PVar x ->
+    let t = fresh () in
+      Ok (t, Env.add x ([], t) Env.empty)
+  | PUnit -> Ok (TUnit, Env.empty)
+  | PBool _ -> Ok (TBool, Env.empty)
+  | PInt _ -> Ok (TInt, Env.empty)
+  | PString _ -> Ok (TString, Env.empty)
+  
   let rec go ctxt e = 
     match e.expr with 
     | Unit -> Ok ([], TUnit)
