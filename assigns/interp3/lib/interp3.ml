@@ -183,17 +183,6 @@ let instantiate (vars, t : ty_scheme) : ty =
       go vars t
 
 let type_of_expr (ctxt : ctxt) (e : expr) : (ty_scheme, Error_msg.t) result =
-  let rec type_pattern ctxt (p : pattern) : (ty * ctxt, Error_msg.t) result =
-  match p.pattern with
-  | PWild -> Ok (fresh (), Env.empty)
-  | PVar x ->
-    let t = fresh () in
-      Ok (t, Env.add x ([], t) Env.empty)
-  | PUnit -> Ok (TUnit, Env.empty)
-  | PBool _ -> Ok (TBool, Env.empty)
-  | PInt _ -> Ok (TInt, Env.empty)
-  | PString _ -> Ok (TString, Env.empty)
-  
   let rec go ctxt e = 
     match e.expr with 
     | Unit -> Ok ([], TUnit)
@@ -322,6 +311,14 @@ let type_of_expr (ctxt : ctxt) (e : expr) : (ty_scheme, Error_msg.t) result =
       | Error e -> Error e 
       end 
     
+    | Annot (e1, expected_ty) ->
+      begin match go ctxt e1 with 
+      | Ok (_, actual_ty) -> 
+        if actual_ty = expected_ty then Ok ([], expected_ty)
+        else Error (exp_ty e1.pos actual_ty expected_ty)
+      | Error e -> Error e 
+      end
+    
     | Assert e1 -> 
       begin match e1.expr with
       | Bool false -> Ok ([], fresh ())
@@ -354,8 +351,8 @@ let type_of_expr (ctxt : ctxt) (e : expr) : (ty_scheme, Error_msg.t) result =
       end
 
 
-      
-    | _ -> assert false
+    | Match _ -> assert false
+
   in go ctxt e
 
 let rec nub l =
@@ -445,17 +442,7 @@ exception Match_fail of pos
 exception Compare_fun_val of pos
 
 
-let rec pattern_match v p : dyn_env option = 
-  begin match p.pattern, v with 
-  | PWild, _ -> Some Env.empty
-  | PVar x, _ -> Some (Env.singleton x v)
-  | PUnit, VUnit -> Some Env.empty
-  | PBool b1, VBool b2 when b1 = b2 -> Some Env.empty
-  | PInt n1, VInt n2 when n1 = n2 -> Some Env.empty
-  | PString s1, VString s2 when s1 = s2 -> Some Env.empty
-  | PCons (c1, Some p), VCons (c2, Some v) when c1 = c2 -> pattern_match v p 
-  | _ -> None
-  end
+
 
 let rec eval_expr (env : dyn_env) (e : Ast.Expr.t) : value =
   match e.expr with
@@ -609,8 +596,7 @@ let rec eval_expr (env : dyn_env) (e : Ast.Expr.t) : value =
         let env' = Env.add name v env 
         in eval_expr env' body  
 
-
-    | _ -> assert false
+    | Match _ -> assert false
     
 
 let eval (p : stmt list) : value =
