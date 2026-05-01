@@ -182,8 +182,8 @@ let instantiate (vars, t : ty_scheme) : ty =
     in 
       go vars t
 
-let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty_scheme, Error_msg.t) result =
-  let rec go e = 
+let type_of_expr (ctxt : ctxt) (e : expr) : (ty_scheme, Error_msg.t) result =
+  let rec go ctxt e = 
     match e.expr with 
     | Unit -> Ok ([], TUnit)
     | Bool _ -> Ok ([], TBool)
@@ -191,7 +191,7 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty_scheme, Error_msg.t) result 
     | String _ -> Ok ([], TString)
 
     | Negate e1 -> 
-      begin match go e1 with
+      begin match go ctxt e1 with
       | Ok (_, TInt) -> Ok ([], TInt)
       | Ok (_, t) -> Error (exp_ty e.pos t TInt)
       | Error e -> Error e
@@ -199,14 +199,14 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty_scheme, Error_msg.t) result 
     | Bop (op, e1, e2) ->
       begin match op with
       | Add | Sub | Mul | Div | Mod -> 
-        begin match go e1, go e2 with
+        begin match go ctxt e1, go ctxt e2 with
         | Ok (_, TInt), Ok (_, TInt) -> Ok ([], TInt)
         | Ok (_, t), Ok (_, _) -> Error (exp_ty e1.pos t TInt)
         | Error e, _ -> Error e
         | _, Error e -> Error e
         end
       | And | Or -> 
-        begin match go e1, go e2 with
+        begin match go ctxt e1, go ctxt e2 with
         | Ok (_, TBool), Ok (_, TBool) -> Ok ([], TBool)
         | Ok (_, t1), Ok (_, t2) ->
           if t1 <> TBool then Error (exp_ty e1.pos t1 TBool)
@@ -216,7 +216,7 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty_scheme, Error_msg.t) result 
         | _, Error e -> Error e
         end
       | Concat -> 
-        begin match go e1, go e2 with
+        begin match go ctxt e1, go ctxt e2 with
         | Ok (_, TString), Ok (_, TString) -> Ok ([], TString)
         | Ok (_, t1), Ok (_, t2) -> 
           if t1 <> TString then Error (exp_ty e1.pos t1 TString)
@@ -226,7 +226,7 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty_scheme, Error_msg.t) result 
         | _, Error e -> Error e
         end
       | Eq | Neq | Lt | Lte | Gt | Gte -> 
-        begin match go e1, go e2 with
+        begin match go ctxt e1, go ctxt e2 with
         | Ok (_, t1), Ok (_, t2) -> 
           if t1 <> t2 then Error (exp_ty e2.pos t2 t1)
           else Ok ([], TBool)
@@ -236,7 +236,7 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty_scheme, Error_msg.t) result 
       end
 
     | If (e1, e2, e3) -> 
-      begin match go e1, go e2, go e3 with
+      begin match go ctxt e1, go ctxt e2, go ctxt e3 with
       | Ok (_, TBool), Ok(_, t2), Ok(_, t3) ->
         if t2 = t3 then Ok([], t2)
         else Error (exp_ty e3.pos t3 t2)
@@ -259,13 +259,13 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty_scheme, Error_msg.t) result 
         | None -> fresh ()
       in
       let ctxt' = Env.add x ([], arg_ty) ctxt in 
-        begin match type_of_expr ctxt' body with 
+        begin match go ctxt' body with 
         | Ok (_, body_ty) -> Ok ([], TFun (arg_ty, body_ty))
         | Error e -> Error e
         end
     
     | App (e1, e2) ->
-      begin match go e1, go e2 with
+      begin match go ctxt e1, go ctxt e2 with
       | Ok (_, TFun (arg_ty, ret_ty)), Ok (_, body_ty) -> 
         if body_ty = arg_ty then Ok([], ret_ty)
         else Error (exp_ty e2.pos body_ty arg_ty)
@@ -273,13 +273,7 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty_scheme, Error_msg.t) result 
       | Error e, _ -> Error e
       |_, Error e -> Error e
       end
-  | Let of
-      {
-        is_rec : bool;
-        name : string;
-        binding : expr;
-        body : expr;
-      }
+
     | Let {is_rec; name; binding; body} ->
       if not is_rec then 
         begin match go ctxt binding with 
@@ -291,7 +285,7 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty_scheme, Error_msg.t) result 
       else
         let fresh_ty = fresh () in 
         let ctxt_with_name = Env.add name ([], fresh_ty) ctxt in 
-          match go ctxt_with_name binding with 
+          begin match go ctxt_with_name binding with 
           | Ok (_, binding_ty) -> 
               if fresh_ty = binding_ty then
                 let ctxt' = Env.add name ([], binding_ty) ctxt in 
@@ -300,10 +294,10 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty_scheme, Error_msg.t) result 
                 Error (exp_ty binding.pos binding_ty fresh_ty)
           | Error e -> Error e 
           end
-          
+
       
     | _ -> assert false
-  in go e
+  in go ctxt e
 
 let rec nub l =
   match l with
