@@ -234,6 +234,18 @@ let type_of_expr (ctxt : ctxt) (e : expr) : (ty_scheme, Error_msg.t) result =
         | _, Error e -> Error e
         end
       end
+
+    | If (e1, e2, e3) -> 
+      begin match go e1, go e2, go e3 with
+      | Ok (_, TBool), Ok(_, t2), Ok(_, t3) ->
+        if t2 = t3 then Ok([], t2)
+        else Error (exp_ty e3.pos t3 t2)
+      | Ok (_, t1), Ok _, Ok _ -> Error (exp_ty e1.pos t1 TBool)
+      | Error e, _, _ -> Error e
+      | _, Error e, _ -> Error e
+      | _, _, Error e -> Error e
+      end
+
     | Var x -> 
       begin match Env.find_opt x ctxt with 
       | Some scheme -> Ok([], instantiate scheme)
