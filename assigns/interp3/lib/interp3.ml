@@ -294,6 +294,21 @@ let type_of_expr (ctxt : ctxt) (e : expr) : (ty_scheme, Error_msg.t) result =
                 Error (exp_ty binding.pos binding_ty fresh_ty)
           | Error e -> Error e 
           end
+    | Tuple l -> 
+      let rec type_all l = 
+        match l with
+        | [] -> Ok []
+        | e1 :: rest -> 
+          begin match go ctxt e1, type_all rest with
+          | Ok (_, t1), Ok ts -> Ok (t1 :: ts)
+          | Error e, _ -> Error e
+          | _, Error e -> Error e 
+          end
+      in 
+      begin match type_all l with
+      | Ok ts -> Ok ([], TTuple ts)
+      | Error e -> Error e 
+      end 
 
       
     | _ -> assert false
